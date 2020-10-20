@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="CSharpKit.LIBNetCDF" Version="4.0.2020.709" />
+    <PackageReference Include="GeoJSON.Net" Version="1.2.19" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
     <PackageReference Include="System.IO.Packaging" Version="4.7.0" />
   </ItemGroup>

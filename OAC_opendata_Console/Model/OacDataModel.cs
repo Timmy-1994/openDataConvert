@@ -264,4 +264,130 @@ namespace OAC_opendata_Console.Model
 
     #endregion
 
+
+    #region 氣象局 OpenData 海面天氣預報 F-A0012-001
+    public class DatasetInfo
+    {
+        public string datasetDescription { get; set; }
+        public DateTime issueTime { get; set; }
+        public DateTime update { get; set; }
+    }
+
+    public class Parameter
+    {
+        public string parameterName { get; set; }
+        public string parameterValue { get; set; }
+        public string parameterUnit { get; set; }
+    }
+
+    public class Time
+    {
+        public DateTime startTime { get; set; }
+        public DateTime endTime { get; set; }
+        public Parameter parameter { get; set; }
+    }
+
+    public class WeatherElement
+    {
+        public string elementName { get; set; }
+        public List<Time> time { get; set; }
+    }
+
+    public class Location
+    {
+        public string locationName { get; set; }
+        public List<WeatherElement> weatherElement { get; set; }
+    }
+
+    public class Dataset
+    {
+        public DatasetInfo datasetInfo { get; set; }
+        public List<Location> location { get; set; }
+    }
+
+    public class Cwbopendata
+    {
+        public string @xmlns { get; set; }
+        public string identifier { get; set; }
+        public string sender { get; set; }
+        public DateTime sent { get; set; }
+        public string status { get; set; }
+        public string msgType { get; set; }
+        public string source { get; set; }
+        public string dataid { get; set; }
+        public string scope { get; set; }
+        public Dataset dataset { get; set; }
+    }
+
+    public class F_A0012_001
+    {
+        public Cwbopendata cwbopendata { get; set; }
+    }
+
+    #endregion
+
+   
+}
+
+
+namespace OAC_opendata_Console.Model_F_A0021_001
+{
+
+    #region 氣象局 OpenData 海面天氣預報 F-A0021-001
+
+    public class ValidTime
+    {
+        public DateTime startTime { get; set; }
+        public DateTime endTime { get; set; }
+    }
+
+    public class WeatherElement
+    {
+        public string elementName { get; set; }
+        public string value { get; set; }
+        public object time { get; set; }
+    }
+
+    public class Time
+    {
+        public ValidTime validTime { get; set; }
+        public List<WeatherElement> weatherElement { get; set; }
+    }
+
+    public class Location
+    {
+        public string locationName { get; set; }
+        public string stationId { get; set; }
+        public string latitude { get; set; }
+        public string longitude { get; set; }
+        public List<Time> time { get; set; }
+    }
+
+    public class Dataset
+    {
+        public List<Location> location { get; set; }
+    }
+
+    public class Cwbopendata
+    {
+        public string @xmlns { get; set; }
+        public string identifier { get; set; }
+        public string sender { get; set; }
+        public DateTime sent { get; set; }
+        public string status { get; set; }
+        public string msgType { get; set; }
+        public string source { get; set; }
+        public string dataid { get; set; }
+        public string scope { get; set; }
+        public string note { get; set; }
+        public Dataset dataset { get; set; }
+    }
+
+    public class F_A0021_001
+    {
+        public Cwbopendata cwbopendata { get; set; }
+    }
+
+    #endregion
+
 }

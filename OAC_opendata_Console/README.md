@@ -26,20 +26,34 @@
     		* 資料格式: NetCDF
             * OPeNDAP OCM 資料集網址: http://med.cwb.gov.tw/opendap/OCM/contents.html
 
+    	* ######  中央氣象局  OPENDATA 資料
+            * 資料集描述: 颱風消息與警報-災害性天氣資訊-颱風警報CAP檔。
+            * 開放資料來源網址 https://opendata.cwb.gov.tw/dataset/warning/W-C0034-001
+            * 資料集描述: 颱風消息與警報-颱風消息KML壓縮檔。
+            * 開放資料來源網址 https://opendata.cwb.gov.tw/dataset/warning/W-C0034-002
+            * 資料集描述: 潮汐預報-(未來1個月潮汐預報，鄉鎮、大潮小潮、滿潮乾潮、時間、潮高)。
+            * 開放資料來源網址 https://opendata.cwb.gov.tw/dataset/forecast/F-A0021-001
+    		* 資料集描述: 臺灣各鄉鎮市區預報資料-鄉鎮天氣預報。
+            * 開放資料來源網址 https://opendata.cwb.gov.tw/dataset/forecast/F-D0047-095 
+            * 資料集描述: 臺灣鄰近及遠洋漁業海面天氣預報資料-海面天氣預報(中文版)。
+            * 開放資料來源網址 https://opendata.cwb.gov.tw/dataset/forecast/F-A0012-001
+
 	* 框架語言: .NET Core 3.1 (C#)
 	* 轉檔輸出格式:  JSON
 	* [ ] (TODO)NWW3 波浪模式
 
 ## 程式打包方式
 
-使用套件管理員將程式打包為單一執行檔(.exe)
+> 使用套件管理員將程式打包為單一執行檔(.exe) 
 ```bash         
 PM>  dotnet publish -r win10-x64 -p:PublishSingleFile=true
 ```
-將本程式需使用的 NetCDF 套件 *.dll 檔複製至與單一執行檔(.exe)同一目錄下
+___
+> 將本程式需使用的 NetCDF 套件 *.dll 檔複製至與單一執行檔(.exe)同一目錄下
 
 `打包後的 *.dll 檔會輸出在打包目錄的 ..\ThirdParty\NetCDF\4.6.2\x64\ 中`
-
+___
+> 將本程式需使用的『近海範圍 `CWB_MarineZones.WGS84.20200622.geojson` 檔』 複製至與單一執行檔(.exe)同一目錄下的 `Data` 資料夾中
 
 ## 程式參數說明  
 直接執行編譯後的 .exe 檔也可檢視參數說明
@@ -50,8 +64,13 @@ PM>  dotnet publish -r win10-x64 -p:PublishSingleFile=true
     *  `ocmSSTncToJson` : OPeNDAP OCM - SST 海表溫度 
     *  `ocmWLncToJson` : OPeNDAP OCM - WL 海面高
     *  `delFolder` : 刪除資料夾
+    *  `cwb_W_C0034_001_002` : 氣象局 OpenDATA 資料下載轉檔 - 颱風消息與警報
+    *  `cwb_F_A0012_001` : 氣象局 OpenDATA 資料下載轉檔 - 海面天氣預報
+    *  `cwb_F_A0021_001` : 氣象局 OpenDATA 資料下載轉檔 - 未來1個月潮汐預報
+    *  `cwb_F_D0047_095` : 氣象局 OpenDATA 資料下載轉檔 - 鄉鎮沿海未來2天逐3小時天氣預報
 * `-targetPath` (必填)資料輸出存放資料夾路徑 
 * `-dataTime` (選填)指定要下載的 OPeNDAP OCM 資料集時間
+* `-cwbAuthorizationKeyFile` (下載氣象局 OpenDATA 必填) 氣象局 OpenDATA 授權碼檔路徑
 
 ## 程式執行範例
 1. 執行下載轉檔「交通部運輸研究所 - 商港海象觀測資料」
@@ -79,6 +98,11 @@ C:\>OCA_opendata_Console.exe -callEvent=ocmUVncToJson -targetPath="C:\OpenDataTm
 4. 執行下載轉檔「OPeNDAP OCM - 海流 UV 當時時間所在小時(hour)的資料」
 ```bash 
 C:\>OCA_opendata_Console.exe -callEvent=ocmUVncToJson -targetPath="C:\OpenDataTmp\OcmUV_Now" -dataTime=onlyNow
+```
+
+5. 執行下載轉檔「氣象局 OpenDATA 資料下載轉檔 - 颱風消息與警報 」
+```bash 
+C:\>OCA_opendata_Console.exe -callEvent=cwb_W_C0034_001_002 -targetPath="C:\OpenDataTmp\typhoon" -cwbAuthorizationKeyFile="C:\OpenDataTmp\typhoon\cwb.key"
 ```
 
 

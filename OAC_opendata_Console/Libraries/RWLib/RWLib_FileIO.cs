@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text;
+﻿using System.IO;
 using System.Threading;
 
 namespace OAC_opendata_Console.Libraries.RWLib
@@ -17,8 +14,11 @@ namespace OAC_opendata_Console.Libraries.RWLib
         {
             if (Directory.Exists(Path.GetDirectoryName(folderPath)))
                 Directory.Delete(Path.GetDirectoryName(folderPath), true);
-            Directory.CreateDirectory(Path.GetDirectoryName(folderPath));
-            Thread.Sleep(1000);
+            while (!Directory.Exists(Path.GetDirectoryName(folderPath)))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(folderPath));
+                Thread.Sleep(1000);
+            }
         }
 
 

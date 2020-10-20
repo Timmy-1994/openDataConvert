@@ -58,6 +58,18 @@
     		* 資料格式: NetCDF
             * OPeNDAP OCM 資料集網址: http://med.cwb.gov.tw/opendap/OCM/contents.html
 
+    	* ######  中央氣象局  OPENDATA 資料
+            * 資料集描述: 颱風消息與警報-災害性天氣資訊-颱風警報CAP檔。
+            * 開放資料來源網址 https://opendata.cwb.gov.tw/dataset/warning/W-C0034-001
+            * 資料集描述: 颱風消息與警報-颱風消息KML壓縮檔。
+            * 開放資料來源網址 https://opendata.cwb.gov.tw/dataset/warning/W-C0034-002
+            * 資料集描述: 潮汐預報-(未來1個月潮汐預報，鄉鎮、大潮小潮、滿潮乾潮、時間、潮高)。
+            * 開放資料來源網址 https://opendata.cwb.gov.tw/dataset/forecast/F-A0021-001
+    		* 資料集描述: 臺灣各鄉鎮市區預報資料-鄉鎮天氣預報。
+            * 開放資料來源網址 https://opendata.cwb.gov.tw/dataset/forecast/F-D0047-095 
+            * 資料集描述: 臺灣鄰近及遠洋漁業海面天氣預報資料-海面天氣預報(中文版)。
+            * 開放資料來源網址 https://opendata.cwb.gov.tw/dataset/forecast/F-A0012-001
+
 	* 框架語言: .NET Core 3.1 (C#)
 	* 轉檔輸出格式:  JSON
 	* [ ] (TODO)NWW3 波浪模式

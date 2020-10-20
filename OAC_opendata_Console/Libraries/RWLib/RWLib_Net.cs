@@ -1,11 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Net;
-using System.Net.Security;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using OAC_opendata_Console.Model;
 
 namespace OAC_opendata_Console.Libraries.RWLib
 {

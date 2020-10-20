@@ -1,6 +1,7 @@
 ﻿using NetCDF;
 using Newtonsoft.Json;
 using OAC_opendata_Console.Model;
+using OAC_opendata_Console.Model_F_A0021_001;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -8,11 +9,14 @@ using System.Linq;
 using OAC_opendata_Console.Libraries.RWLib;
 using System.Xml;
 using System.Text.RegularExpressions;
+using System.IO.Compression;
+using GeoJSON.Net.Feature;
+using GeoJSON.Net.Geometry;
 
 namespace OAC_opendata_Console
 {
     class Program
-    { 
+    {
 
         static void Main(string[] args)
         {
@@ -27,12 +31,17 @@ namespace OAC_opendata_Console
                 Console.WriteLine(" -callEvent (必填)處理資料集代碼 \n");
                 Console.WriteLine("--------------------------------");
                 Console.WriteLine(" Ex.  -callEvent = isoheXMLtoJson \n");
-                Console.WriteLine("  isoheXMLtoJson   : 運研所海氣象資料下載轉檔 - 商港觀測資料 ");
-                Console.WriteLine("  ocmUVncToJson    : OPeNDAP OCM 資料下載轉檔 - 海流 UV ");
-                Console.WriteLine("  ocmSALTncToJson  : OPeNDAP OCM 資料下載轉檔 - SALT 海表鹽度 ");
-                Console.WriteLine("  ocmSSTncToJson   : OPeNDAP OCM 資料下載轉檔 - SST 海表溫度 ");
-                Console.WriteLine("  ocmWLncToJson    : OPeNDAP OCM 資料下載轉檔 - WL 海面高 ");
-                Console.WriteLine("  delFolder        : 刪除資料夾 (提供刪除下載資料原始檔存放的資料夾)");
+                Console.WriteLine("  isoheXMLtoJson      : 運研所海氣象資料下載轉檔 - 商港觀測資料 ");
+                Console.WriteLine("  ocmUVncToJson       : OPeNDAP OCM 資料下載轉檔 - 海流 UV ");
+                Console.WriteLine("  ocmSALTncToJson     : OPeNDAP OCM 資料下載轉檔 - SALT 海表鹽度 ");
+                Console.WriteLine("  ocmSSTncToJson      : OPeNDAP OCM 資料下載轉檔 - SST 海表溫度 ");
+                Console.WriteLine("  ocmWLncToJson       : OPeNDAP OCM 資料下載轉檔 - WL 海面高 ");
+                Console.WriteLine("  delFolder           : 刪除資料夾 (提供刪除下載資料原始檔存放的資料夾)");
+                Console.WriteLine("  cwb_W_C0034_001_002 : 氣象局 OpenDATA 資料下載轉檔 - 颱風消息與警報 ");
+                Console.WriteLine("  cwb_F_A0012_001     : 氣象局 OpenDATA 資料下載轉檔 - 海面天氣預報 ");
+                Console.WriteLine("  cwb_F_A0021_001     : 氣象局 OpenDATA 資料下載轉檔 - 未來1個月潮汐預報 ");
+                Console.WriteLine("  cwb_F_D0047_095     : 氣象局 OpenDATA 資料下載 - 鄉鎮沿海未來2天逐3小時天氣預報 ");
+
                 Console.WriteLine(" ");
                 Console.WriteLine("--------------------------------");
                 Console.WriteLine(" -targetPath (必填)資料輸出存放資料夾路徑 \n");
@@ -44,6 +53,13 @@ namespace OAC_opendata_Console
                 Console.WriteLine("--------------------------------");
                 Console.WriteLine($" Ex.  -dataTime = {DateTime.Now.ToString("yyyyMMdd")}         (指定抓 OPeNDAP 上 YYYYMMDD 的資料源) \n");
                 Console.WriteLine($" Ex.  -dataTime = onlyNow          (只會抓取當小時最新的 1 筆資料)  ");
+                Console.WriteLine(" ");
+
+                Console.WriteLine("--------------------------------");
+                Console.WriteLine(" -cwbAuthorizationKeyFile (下載氣象局 OpenDATA 必填) 氣象局 OpenDATA 授權碼檔路徑 \n");
+                Console.WriteLine("--------------------------------");
+                Console.WriteLine($" Ex.  -cwbAuthorizationKeyFile = \"C:\\OpenDataTrans\\cwb.key\"  ");
+                Console.WriteLine($"      上述檔案中第一行存入 氣象局 OpenDATA 的 API 授權碼 授權碼格式  CWB-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX   ");
                 Console.WriteLine(" ");
                 Console.WriteLine("================================");
 
@@ -58,7 +74,7 @@ namespace OAC_opendata_Console
                 Console.WriteLine("--------------------------------");
                 foreach (KeyValuePair<string, string> kv in param)
                 {
-                    Console.WriteLine("Key={0}  Value={1}",kv.Key, kv.Value);
+                    Console.WriteLine("Key={0}  Value={1}", kv.Key, kv.Value);
                 }
                 Console.WriteLine("--------------------------------");
 
@@ -286,10 +302,10 @@ namespace OAC_opendata_Console
                         {
                             string parm_dataTime = param["dataTime"];
                             parm_dataTime = parm_dataTime.Split('"')[0].Trim();
-                            
+
                             if (parm_dataTime.IndexOf("onlyNow") != -1)
                                 onlyTransNowData = true;
-                            else if(parm_dataTime.Length == 8)
+                            else if (parm_dataTime.Length == 8)
                                 argOcmDataObtainDate = parm_dataTime;
                         }
                         #endregion
@@ -317,7 +333,7 @@ namespace OAC_opendata_Console
                         rwLibOcmLog.log($"=========================================================================");
                         rwLibOcmLog.log($" OPeNDAP OCM 資料下載轉檔 ---- Begin \n");
 
-                        if (!ncTypeCode.Equals(""))
+                        if (!string.IsNullOrEmpty(ncTypeCode))
                         {
                             try
                             {
@@ -647,15 +663,521 @@ namespace OAC_opendata_Console
 
                     #endregion
 
-                     
-                     
+
+                    #region  氣象局 OpenDATA 資料下載轉檔 - 颱風消息與警報
+                    if (callEvent.Equals("cwb_W_C0034_001_002") && param.ContainsKey("cwbAuthorizationKeyFile"))
+                    {
+                        string cwbAuthorizationKeyFile = param["cwbAuthorizationKeyFile"];
+
+                        //https://opendata.cwb.gov.tw/dataset/warning/W-C0034-001 CAP 颱風警報
+                        //  本資料為提供氣象局之目前颱風警報資料。海上颱風警報發布期間每3小時更新1次，陸上颱風警報發布期間每小時更新1次。
+                        //https://opendata.cwb.gov.tw/dataset/warning/W-C0034-002 KMZ 颱風消息
+                        //  本資料為提供西北太平洋地區及南海目前所有活動中颱風之資訊檔案, 包含過去、現在及未來預報之資訊。
+                        //  有颱風活動時每6小時更新1次，有颱風警報期間每3小時更新1次。
+                        RWLib_Log rwLibCwbTyphoonLog = new RWLib_Log(@$"{argFileOrOutFolderPath}\log\", "cwb_W_C0034_001_002");
+                        StreamReader sr;
+                        rwLibCwbTyphoonLog.log($"=========================================================================");
+                        rwLibCwbTyphoonLog.log($" 氣象局 OpenDATA 資料下載轉檔 - 颱風消息與警報 ---- Begin \n");
+
+                        // 檢查 API 授權
+                        Tuple<bool, string> chkCwbKey = checkCwbKeyFileAndFormat(cwbAuthorizationKeyFile);
+                        if (chkCwbKey.Item1)
+                        {
+                            // 下載 Url 
+                            string cwbTyphoonKMZUrl = @$"https://opendata.cwb.gov.tw/fileapi/v1/opendataapi/W-C0034-002?Authorization={chkCwbKey.Item2}&downloadType=WEB&format=KMZ";
+                            string cwbTyphoonCAPUrl = @$"https://opendata.cwb.gov.tw/fileapi/v1/opendataapi/W-C0034-001?Authorization={chkCwbKey.Item2}&downloadType=WEB&format=CAP";
+
+                            // KMZ 下載存放路徑
+                            string cwbTyphoonKMZsavePath = @$"{argFileOrOutFolderPath}\kmz\";
+                            rwLibFio.DelAndCreateFolder(cwbTyphoonKMZsavePath);
+
+                            // CAP 下載存放路徑
+                            string cwbTyphoonCAPsavePath = @$"{argFileOrOutFolderPath}\cap\";
+                            rwLibFio.DelAndCreateFolder(cwbTyphoonCAPsavePath);
+
+                            // 產出 JSON 檔案路徑
+                            string outJsonFolderPath = @$"{argFileOrOutFolderPath}\json\";
+                            string outJsonFilePath = @$"{outJsonFolderPath}W-C0034-001_002.json";
+
+                            // 執行下載
+                            rwLibCwbTyphoonLog.log($">>>> " + cwbTyphoonKMZUrl);
+                            string kmzFilePath = $"{cwbTyphoonKMZsavePath}W-C0034-002.kmz";
+                            var kmzDownloadStatus = rwLibNet.DownloadFile(cwbTyphoonKMZUrl, kmzFilePath);
+                            rwLibCwbTyphoonLog.log($" KMZ 下載狀態 " + kmzDownloadStatus);
+
+                            rwLibCwbTyphoonLog.log($">>>> " + cwbTyphoonCAPUrl);
+                            string capFilePath = $"{cwbTyphoonCAPsavePath}W-C0034-001.cap";
+                            var capDownloadStatus = rwLibNet.DownloadFile(cwbTyphoonCAPUrl, capFilePath);
+                            rwLibCwbTyphoonLog.log($" CAP 下載狀態 " + capDownloadStatus);
+
+                            if (kmzDownloadStatus && capDownloadStatus)
+                            {
+
+                                ZipArchive archive = ZipFile.OpenRead(kmzFilePath);
+                                List<Stream> kmls = archive.Entries
+                                    .Select(x => x.Open())
+                                    .ToList();
+
+                                if (kmls.Any())
+                                {
+                                    //讀取颱風消息 KMZ
+                                    sr = new StreamReader(kmls[0]);
+                                    var xmlStr = sr.ReadToEnd();
+                                    sr.Dispose();
+
+                                    XmlDocument doc = new XmlDocument();
+                                    doc.LoadXml(xmlStr);
+
+                                    XmlNamespaceManager ns = new XmlNamespaceManager(doc.NameTable);
+                                    ns.AddNamespace("kml", "http://www.opengis.net/kml/2.2");
+                                    XmlNodeList Placemark = doc.SelectNodes("//kml:Placemark", ns);
+
+                                    IEnumerable<Feature> features = Placemark.Cast<XmlElement>()
+                                        .Select(x =>
+                                        {
+
+                                            IGeometryObject geometry = null;
+
+                                            foreach (XmlElement g in x.ChildNodes)
+                                            {
+                                                if (!new Regex(@"Point|LineString|Polygon").IsMatch(g.Name))
+                                                {
+                                                    continue;
+                                                }
+                                                IEnumerable<double[]> coords = g.InnerText
+                                                    .Trim()
+                                                    .Split("\n")
+                                                    .Select(x =>
+                                                    {
+                                                        try
+                                                        {
+                                                            return Array.ConvertAll(x.Split(','), Double.Parse);
+                                                        }
+                                                        catch
+                                                        {
+                                                            return null;
+                                                        }
+                                                    });
+
+                                                if (coords.Contains(null))
+                                                {
+                                                    continue;
+                                                }
+
+                                                if (g.Name == "Point")
+                                                {
+                                                    double lat = coords.ToList()[0][1];
+                                                    double lng = coords.ToList()[0][0];
+                                                    double alt = coords.ToList()[0][2];
+                                                    geometry = new Point(new Position(lat, lng, alt));
+                                                }
+                                                else if (g.Name == "LineString")
+                                                {
+                                                    geometry = new LineString(coords);
+                                                }
+                                                else if (g.Name == "Polygon")
+                                                {
+                                                    geometry = new Polygon(new List<LineString> { new LineString(coords) });
+                                                }
+                                            }
+
+
+                                            return new Feature(geometry, new
+                                            {
+                                                name = x["name"] == null ? "" : x["name"].InnerText,
+                                                description = x["description"] == null ? "" : x["description"].InnerText,
+                                                styleUrl = x["styleUrl"] == null ? "" : x["styleUrl"].InnerText
+                                            });
+
+                                        });
+
+
+                                    //讀取 CAP 檔 
+                                    sr = new StreamReader(capFilePath);
+                                    var cap_xmlStr = sr.ReadToEnd();
+                                    sr.Dispose();
+
+                                    XmlDocument cap_doc = new XmlDocument();
+                                    cap_doc.LoadXml(cap_xmlStr);
+
+                                    XmlNamespaceManager cap_ns = new XmlNamespaceManager(cap_doc.NameTable);
+                                    cap_ns.AddNamespace("alert", "urn:oasis:names:tc:emergency:cap:1.2");
+                                    XmlNodeList CAP_info = cap_doc.SelectNodes("//alert:info", cap_ns);
+
+                                    var returnCapInfo = CAP_info.Cast<XmlElement>()
+                                           .Select(x =>
+                                           {
+                                               return new
+                                               {
+                                                   category = x["category"] == null ? "" : x["category"].InnerText,
+                                                   @event = x["event"] == null ? "" : x["event"].InnerText,
+                                                   urgency = x["urgency"] == null ? "" : x["urgency"].InnerText,
+                                                   severity = x["severity"] == null ? "" : x["severity"].InnerText,
+                                                   certainty = x["certainty"] == null ? "" : x["certainty"].InnerText,
+                                                   effective = x["effective"] == null ? "" : x["effective"].InnerText,
+                                                   onset = x["onset"] == null ? "" : x["onset"].InnerText,
+                                                   expires = x["expires"] == null ? "" : x["expires"].InnerText,
+                                                   headline = x["headline"] == null ? "" : x["headline"].InnerText,
+                                                   description = x["description"] == null ? "" : x["description"].InnerText
+                                               };
+
+                                           });
+
+                                    //將 CAP 與 GeoJSON 資訊合併輸出
+                                    var rtnTyphoonObj = new
+                                    {
+                                        cap = returnCapInfo,
+                                        geojson = new FeatureCollection(features.ToList())
+                                    };
+                                    string typhoon_json = JsonConvert.SerializeObject(rtnTyphoonObj);
+
+                                    rwLibFio.DelAndCreateFolder(outJsonFolderPath);
+                                    rwLibCwbTyphoonLog.log($"產出 JSON 檔 {outJsonFilePath}");
+                                    System.IO.File.WriteAllText(outJsonFilePath, typhoon_json);
+
+                                }
+                                else
+                                {
+                                    rwLibCwbTyphoonLog.log($" KMZ 資料無內容 ");
+                                }
+
+                            }
+                            else
+                            {
+                                rwLibCwbTyphoonLog.log($" KMZ 或 CAP 下載失敗，不進行轉檔作業。 ");
+                            }
+                        }
+                        else
+                        {
+                            rwLibCwbTyphoonLog.log($" {chkCwbKey.Item2} 不進行轉檔作業。 ");
+                        }
+
+                        rwLibCwbTyphoonLog.log($"  氣象局 OpenDATA 資料下載轉檔 - 颱風消息與警報 ---- End\n\n");
+                    }
+
+                    #endregion
+
+
+                    #region  氣象局 OpenDATA 資料下載轉檔為 GeoJSON - 海面天氣預報
+                    if (callEvent.Equals("cwb_F_A0012_001") && param.ContainsKey("cwbAuthorizationKeyFile"))
+                    {
+                        //https://opendata.cwb.gov.tw/dataset/forecast/F-A0012-001
+                        string cwbAuthorizationKeyFile = param["cwbAuthorizationKeyFile"];
+
+                        RWLib_Log rwLibCwb_F_A0012_001_Log = new RWLib_Log(@$"{argFileOrOutFolderPath}\log\", "cwb_F_A0012_001");
+                        rwLibCwb_F_A0012_001_Log.log($"=========================================================================");
+                        rwLibCwb_F_A0012_001_Log.log($" 氣象局 OpenDATA 資料下載轉檔 - 海面天氣預報 ---- Begin \n");
+
+                        // 檢查 API 授權
+                        Tuple<bool, string> chkCwbKey = checkCwbKeyFileAndFormat(cwbAuthorizationKeyFile);
+                        if (chkCwbKey.Item1)
+                        {
+
+                            // 近海範圍 GeoJSON 圖形檔檢查
+                            string cwbMarineZonesShpPath = Path.Combine(Environment.CurrentDirectory, @"Data\CWB_MarineZones.WGS84.20200622.geojson");
+                            if (File.Exists(cwbMarineZonesShpPath))
+                            {
+                                StreamReader sr;
+                                // 讀取近海範圍 GeoJSON 圖形  
+                                sr = new StreamReader(cwbMarineZonesShpPath);
+                                var json = sr.ReadToEnd();
+                                sr.Dispose();
+
+                                var featureCollection = JsonConvert.DeserializeObject<FeatureCollection>(json);
+                                if (featureCollection.Features.Count == 17)
+                                {
+
+                                    // 建立 沿海名稱, Geometry 字典
+                                    Dictionary<string, IGeometryObject> DicShpName = featureCollection.Features.ToDictionary(
+                                        k => k.Properties["ChtName"].ToString(),
+                                        v => v.Geometry
+                                    );
+
+
+                                    // 下載 Url 
+                                    string cwb_F_A0012_001_Url = @$"https://opendata.cwb.gov.tw/fileapi/v1/opendataapi/F-A0012-001?Authorization={chkCwbKey.Item2}&downloadType=WEB&format=JSON";
+
+                                    // 下載存放路徑
+                                    string cwb_F_A0012_001_savePath = @$"{argFileOrOutFolderPath}\cwb_json\";
+                                    rwLibFio.DelAndCreateFolder(cwb_F_A0012_001_savePath);
+
+                                    // 產出 JSON 檔案路徑
+                                    string outJsonFolderPath = @$"{argFileOrOutFolderPath}\json\";
+                                    string outJsonFilePath = @$"{outJsonFolderPath}geo_F_A0012_001.json";
+
+                                    // 執行下載
+                                    rwLibCwb_F_A0012_001_Log.log($">>>> " + cwb_F_A0012_001_Url);
+                                    string jsonFilePath = $"{cwb_F_A0012_001_savePath}F-A0012-001.json";
+                                    var jsonDownloadStatus = rwLibNet.DownloadFile(cwb_F_A0012_001_Url, jsonFilePath);
+                                    rwLibCwb_F_A0012_001_Log.log($" JSON 下載狀態 " + jsonDownloadStatus);
+
+                                    if (jsonDownloadStatus)
+                                    {
+                                        // 讀取氣象局  海面天氣預報-海面天氣預報
+                                        sr = new StreamReader(jsonFilePath);
+                                        json = sr.ReadToEnd();
+                                        sr.Dispose();
+
+                                        var cwb = JsonConvert.DeserializeObject<F_A0012_001>(json);
+                                        if (cwb.cwbopendata != null)
+                                        {
+                                            if (cwb.cwbopendata.dataset.location.Count > 0)
+                                            {
+                                                // 轉成 GeoJSON 格式，將氣象局預報資料放入 Properties 中
+                                                IEnumerable<Feature> features_F_A0012_001 = cwb.cwbopendata.dataset.location
+                                                    // 進行整理，將氣象局資料只留近海部分
+                                                    .Where(w => DicShpName.ContainsKey(w.locationName))
+                                                    .Select(f =>
+                                                    {
+                                                        IGeometryObject geometry = null;
+
+                                                        if (DicShpName.ContainsKey(f.locationName))
+                                                            geometry = DicShpName[f.locationName];
+
+                                                        return new Feature(geometry, new
+                                                        {
+                                                            f.locationName,
+                                                            f.weatherElement
+                                                        });
+
+                                                    });
+
+                                                string out_json = JsonConvert.SerializeObject(new FeatureCollection(features_F_A0012_001.ToList()));
+                                                rwLibFio.DelAndCreateFolder(outJsonFolderPath);
+                                                rwLibCwb_F_A0012_001_Log.log($"產出 GeoJSON 檔 {outJsonFilePath}");
+                                                File.WriteAllText(outJsonFilePath, out_json);
+
+                                            }
+                                            else
+                                            {
+                                                rwLibCwb_F_A0012_001_Log.log($" 氣象局 OpenDATA 資料筆數異常，不進行轉檔作業。 ");
+                                            }
+                                        }
+                                        else
+                                        {
+                                            rwLibCwb_F_A0012_001_Log.log($" JSON 檔無法解析為 F_A0012_001 物件，不進行轉檔作業。 ");
+                                        }
+                                    }
+                                    else
+                                    {
+                                        rwLibCwb_F_A0012_001_Log.log($" 氣象局 OpenDATA 資料下載失敗，不進行轉檔作業。 ");
+                                    }
+                                }
+                                else
+                                {
+                                    rwLibCwb_F_A0012_001_Log.log($" 近海範圍 GeoJSON 圖形資料筆數不正確，不進行轉檔作業。");
+                                }
+                            }
+                            else
+                            {
+                                rwLibCwb_F_A0012_001_Log.log($" 近海範圍 GeoJSON 檔不存在{cwbMarineZonesShpPath}，不進行轉檔作業。 ");
+                            }
+                        }
+                        else
+                        {
+                            rwLibCwb_F_A0012_001_Log.log($" {chkCwbKey.Item2} 不進行轉檔作業。 ");
+                        }
+
+                        rwLibCwb_F_A0012_001_Log.log($"  氣象局 OpenDATA 資料下載轉檔 - 海面天氣預報 ---- End\n\n");
+                    }
+
+                    #endregion
+
+
+                    #region  氣象局 OpenDATA 資料下載 (僅下載 JSON) - 鄉鎮沿海未來2天逐3小時天氣預報
+                    if ((callEvent.Equals("cwb_X_XXXXX_XXX") || callEvent.Equals("cwb_F_D0047_095"))
+                        && param.ContainsKey("cwbAuthorizationKeyFile"))
+                    {
+                        //https://opendata.cwb.gov.tw/dataset/forecast/F-D0047-095 鄉鎮沿海未來2天逐3小時天氣預報
+                        string cwbAuthorizationKeyFile = param["cwbAuthorizationKeyFile"];
+
+                        string datasetName = "";
+                        string dataCode = "";
+                        switch (callEvent)
+                        {
+                            case "cwb_X_XXXXX_XXX":
+                                datasetName = "xxxxxxxxxx";
+                                dataCode = "X-XXXXX-XXX";
+                                break;
+                            case "cwb_F_D0047_095":
+                                datasetName = "鄉鎮沿海未來2天逐3小時天氣預報";
+                                dataCode = "F-D0047-095";
+                                break;
+                        }
+
+                        StreamReader sr;
+                        RWLib_Log rwLibCwb_onlyDownload_Log = new RWLib_Log(@$"{argFileOrOutFolderPath}\log\", callEvent);
+                        rwLibCwb_onlyDownload_Log.log($"=========================================================================");
+                        rwLibCwb_onlyDownload_Log.log($" 氣象局 OpenDATA 資料下載 - {datasetName} ---- Begin \n");
+
+                        // 檢查 API 授權
+                        Tuple<bool, string> chkCwbKey = checkCwbKeyFileAndFormat(cwbAuthorizationKeyFile);
+                        if (chkCwbKey.Item1)
+                        {
+                            // 下載 Url 
+                            string cwb_download_Url = @$"https://opendata.cwb.gov.tw/fileapi/v1/opendataapi/{dataCode}?Authorization={chkCwbKey.Item2}&downloadType=WEB&format=JSON";
+
+                            // 下載存放路徑
+                            string cwb_json_savePath = @$"{argFileOrOutFolderPath}\cwb_json\";
+                            rwLibFio.DelAndCreateFolder(cwb_json_savePath);
+                            string jsonFilePath = $"{cwb_json_savePath}{dataCode}.json";
+
+                            // 執行下載
+                            rwLibCwb_onlyDownload_Log.log($">>>> " + cwb_download_Url);
+                            var jsonDownloadStatus = rwLibNet.DownloadFile(cwb_download_Url, jsonFilePath);
+                            rwLibCwb_onlyDownload_Log.log($" JSON 下載狀態 " + jsonDownloadStatus);
+
+                            if (jsonDownloadStatus)
+                            {
+                                sr = new StreamReader(jsonFilePath);
+                                var jsonStr = sr.ReadToEnd();
+                                sr.Dispose();
+
+                                if (jsonStr.Length > 0)
+                                {
+                                    // 產出 JSON 檔案路徑
+                                    string outJsonFolderPath = @$"{argFileOrOutFolderPath}\json\";
+                                    string outJsonFilePath = @$"{outJsonFolderPath}{dataCode}.json";
+
+                                    rwLibFio.DelAndCreateFolder(outJsonFolderPath);
+                                    rwLibCwb_onlyDownload_Log.log($"更新 JSON 檔 {outJsonFilePath}");
+                                    File.WriteAllText(outJsonFilePath, jsonStr);
+                                }
+                                else
+                                {
+                                    rwLibCwb_onlyDownload_Log.log($" JSON 檔長度異常，不進行更新 ");
+                                }
+                            }
+                            else
+                            {
+                                rwLibCwb_onlyDownload_Log.log($" 氣象局 OpenDATA 資料下載失敗，不進行更新作業。 ");
+                            }
+                        }
+                        else
+                        {
+                            rwLibCwb_onlyDownload_Log.log($" {chkCwbKey.Item2} 不進行轉檔作業。 ");
+                        }
+
+                        rwLibCwb_onlyDownload_Log.log($"  氣象局 OpenDATA 資料下載 - {datasetName} ---- End\n\n");
+                    }
+
+                    #endregion
+
+
+                    #region  氣象局 OpenDATA 資料下載轉檔 - 未來1個月潮汐預報 (單檔資料量約 21 MB，依 locationName 拆分，做 geo_index.json ) 
+                    if (callEvent.Equals("cwb_F_A0021_001") && param.ContainsKey("cwbAuthorizationKeyFile"))
+                    {
+                        //https://opendata.cwb.gov.tw/dataset/forecast/F-A0021-001 未來1個月潮汐預報
+                        string cwbAuthorizationKeyFile = param["cwbAuthorizationKeyFile"];
+
+                        string datasetName = "";
+                        string dataCode = "";
+                        switch (callEvent)
+                        {
+                            case "cwb_F_A0021_001":
+                                datasetName = "未來1個月潮汐預報";
+                                dataCode = "F-A0021-001";
+                                break;
+                        }
+
+                        StreamReader sr;
+                        RWLib_Log rwLibCwb_onlyDownload_Log = new RWLib_Log(@$"{argFileOrOutFolderPath}\log\", callEvent);
+                        rwLibCwb_onlyDownload_Log.log($"=========================================================================");
+                        rwLibCwb_onlyDownload_Log.log($" 氣象局 OpenDATA 資料下載轉檔 - {datasetName} ---- Begin \n");
+
+                        // 檢查 API 授權
+                        Tuple<bool, string> chkCwbKey = checkCwbKeyFileAndFormat(cwbAuthorizationKeyFile);
+                        if (chkCwbKey.Item1)
+                        {
+                            // 下載 Url 
+                            string cwb_download_Url = @$"https://opendata.cwb.gov.tw/fileapi/v1/opendataapi/{dataCode}?Authorization={chkCwbKey.Item2}&downloadType=WEB&format=JSON";
+
+                            // 下載存放路徑
+                            string cwb_json_savePath = @$"{argFileOrOutFolderPath}\cwb_json\";
+                            rwLibFio.DelAndCreateFolder(cwb_json_savePath);
+                            string jsonFilePath = $"{cwb_json_savePath}{dataCode}.json";
+
+                            // 執行下載
+                            rwLibCwb_onlyDownload_Log.log($">>>> " + cwb_download_Url);
+                            var jsonDownloadStatus = rwLibNet.DownloadFile(cwb_download_Url, jsonFilePath);
+                            rwLibCwb_onlyDownload_Log.log($" JSON 下載狀態 " + jsonDownloadStatus);
+
+                            if (jsonDownloadStatus)
+                            {
+                                sr = new StreamReader(jsonFilePath);
+                                var jsonStr = sr.ReadToEnd();
+                                sr.Dispose();
+
+                                var cwb = JsonConvert.DeserializeObject<F_A0021_001>(jsonStr);
+                                if (cwb.cwbopendata != null)
+                                {
+                                    // 產出 JSON 檔案路徑
+                                    string outJsonFolderPath = @$"{ argFileOrOutFolderPath}\json\";
+                                    string outJsonFilePath = @$"{outJsonFolderPath}{dataCode}.json";
+
+                                    if (cwb.cwbopendata.dataset.location.Count > 0)
+                                    {
+                                        // 產生 GeoJSON 的 Index 檔
+                                        var featuresIndex = cwb.cwbopendata.dataset.location.Select(f =>
+                                        {
+                                            IGeometryObject geometry = null;
+
+                                            double lat = double.Parse(f.latitude);
+                                            double lng = double.Parse(f.longitude);
+                                            geometry = new Point(new Position(lat, lng));
+
+                                            return new Feature(geometry, new
+                                            {
+                                                f.locationName,
+                                                f.stationId,
+                                                detailfilename = f.stationId + ".json"
+                                            });
+                                        });
+
+                                        rwLibFio.DelAndCreateFolder(outJsonFolderPath);
+
+                                        rwLibCwb_onlyDownload_Log.log($" 輸出 geo_index.json");
+                                        string index_json = JsonConvert.SerializeObject(new FeatureCollection(featuresIndex.ToList()));
+                                        File.WriteAllText($"{outJsonFolderPath}geo_index.json", index_json);
+
+                                        // 每個沿海點位預報資訊
+                                        foreach (Model_F_A0021_001.Location loc in cwb.cwbopendata.dataset.location)
+                                        {
+                                            rwLibCwb_onlyDownload_Log.log($" 輸出 {loc.locationName} --> {loc.stationId}.json");
+                                            string loc_json = JsonConvert.SerializeObject(loc);
+                                            File.WriteAllText($"{outJsonFolderPath}{loc.stationId}.json", loc_json);
+                                        }
+
+                                    } 
+                                }
+                                else
+                                {
+                                    rwLibCwb_onlyDownload_Log.log($" 下載的 JSON 檔無法解析成 F_A0021_001 物件，不進行更新。");
+                                }                                
+                            }
+                            else
+                            {
+                                rwLibCwb_onlyDownload_Log.log($" 氣象局 OpenDATA 資料下載失敗，不進行更新作業。 ");
+                            }
+                        }
+                        else
+                        {
+                            rwLibCwb_onlyDownload_Log.log($" {chkCwbKey.Item2} 不進行轉檔作業。 ");
+                        }
+
+                        rwLibCwb_onlyDownload_Log.log($"  氣象局 OpenDATA 資料下載 - {datasetName} ---- End\n\n");
+                    }
+
+                    #endregion
+
+
 
                     Console.WriteLine("程式執行結束");
 
 
 
                 }
-            
+
             }
 
 
@@ -671,6 +1193,45 @@ namespace OAC_opendata_Console
         {
             var regex = new Regex(ParameterQuery);
             return regex.Matches(value).Cast<Match>().ToDictionary(m => m.Groups["key"].Value.Trim(), m => m.Groups["value"].Value.Trim());
+        }
+
+        /// <summary>
+        /// 檢查氣象局的授權檔是否正確
+        /// </summary>
+        /// <param name="cwbKeyFilePath"></param>
+        /// <returns></returns>
+        private static Tuple<bool, string> checkCwbKeyFileAndFormat(string cwbAuthorizationKeyFile)
+        {
+            bool checkStatus = true;
+            string rtnInfo = "";
+
+            if (System.IO.File.Exists(cwbAuthorizationKeyFile))
+            {
+                // 讀取授權檔
+                string cwbAuthorizationKey = System.IO.File.ReadAllText(cwbAuthorizationKeyFile).Trim();
+                // 授權碼格式檢查
+                bool CwbKeyFormatCheck = false;
+                if (cwbAuthorizationKey.Length == 40)
+                    if (cwbAuthorizationKey.Split('-').Length == 6)
+                        if (cwbAuthorizationKey.Split('-')[0].ToUpper().Equals("CWB"))
+                            CwbKeyFormatCheck = true;
+                if (CwbKeyFormatCheck)
+                {
+                    rtnInfo = cwbAuthorizationKey;
+                }
+                else
+                {
+                    checkStatus = false;
+                    rtnInfo = "氣象局 OpenDATA 的 API 授權碼格式不符";
+                }
+            }
+            else
+            {
+                checkStatus = false;
+                rtnInfo = "氣象局 OpenDATA 的 API 授權碼檔案不存在";
+            }
+
+            return new Tuple<bool, string>(checkStatus, rtnInfo);
         }
     }
 }
